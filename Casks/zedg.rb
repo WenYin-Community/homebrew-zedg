@@ -1,6 +1,6 @@
 cask "zedg" do
-  version "1.26.2"
-  sha256 "d85c28c4e67d75daff2094e2096a67cc115e3ef6312cdf1f9dfb9af9094201d9"
+  version "1.27.0"
+  sha256 "9676c282ab034456cb22b4bf59c4878fb2fedccb49f5e05d6809039aab5eb889"
 
   url "https://github.com/wenyinos/ZedG/releases/download/v#{version}/zedg-zh-cn-macos-aarch64-v#{version}.dmg"
   name "ZedG"
