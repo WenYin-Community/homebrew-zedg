@@ -1,0 +1,73 @@
+name: 更新 Cask
+
+# 从 WenYin-Community/ZedG 最新 Release 自动更新 Homebrew cask。
+# 仅使用本仓库的 GITHUB_TOKEN，无需跨仓库 PAT。
+
+on:
+  schedule:
+    - cron: "0 4 * * *" # UTC 04:00（GitHub schedule 可能延迟）
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    env:
+      UPSTREAM: WenYin-Community/ZedG
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 生成 Cask
+        run: |
+          TAG=$(curl -sf "https://api.github.com/repos/${UPSTREAM}/releases/latest" | jq -r .tag_name)
+          [ -n "$TAG" ] && [ "$TAG" != "null" ] || { echo "::error::无法获取上游最新版本"; exit 1; }
+          echo "上游版本: $TAG"
+          CLEAN="${TAG#v}"
+          URL_ARM="https://github.com/${UPSTREAM}/releases/download/${TAG}/zedg-zh-cn-macos-aarch64-${TAG}.dmg"
+          HASH_ARM=$(tmp=$(mktemp); curl -sfL -o "$tmp" "$URL_ARM"; sha256sum "$tmp" | awk '{print $1}'; rm -f "$tmp")
+
+          mkdir -p Casks
+          cat > Casks/zedg.rb <<CASK
+          cask "zedg" do
+            version "$CLEAN"
+            sha256 "$HASH_ARM"
+
+            url "https://github.com/${UPSTREAM}/releases/download/v#{version}/zedg-zh-cn-macos-aarch64-v#{version}.dmg"
+            name "ZedG"
+            desc "Zed Editor (Localized / 汉化版)"
+            homepage "https://github.com/${UPSTREAM}"
+
+            depends_on arch: :arm64
+            depends_on macos: ">= :ventura"
+
+            app "ZedG.app"
+
+            postflight do
+              system_command "/usr/bin/xattr",
+                             args: ["-rd", "com.apple.quarantine", "#{appdir}/ZedG.app"]
+            end
+
+            zap trash: [
+              "~/Library/Application Support/Zed",
+              "~/Library/Caches/dev.zed.ZedG",
+              "~/Library/Preferences/dev.zed.ZedG.plist",
+            ]
+          end
+          CASK
+          echo "--- Casks/zedg.rb ---"
+          cat Casks/zedg.rb
+
+      - name: 提交更新
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Casks/zedg.rb
+          if git diff --cached --quiet; then
+            echo "Cask 无变化"
+          else
+            V=$(grep -oP 'version "\K[^"]+' Casks/zedg.rb)
+            git commit -m "chore: 更新到 v${V}"
+            git push
+          fi
